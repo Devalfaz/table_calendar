@@ -56,11 +56,6 @@ class TableCalendar<T> extends StatefulWidget {
   /// Days after it will use `disabledStyle` and trigger `onDisabledDayTapped` callback.
   final DateTime lastDay;
 
-  /// DateTime that will be treated as today. Defaults to `DateTime.now()`.
-  ///
-  /// Overriding this property might be useful for testing.
-  final DateTime? currentDay;
-
   /// List of days treated as weekend days.
   /// Use built-in `DateTime` weekday constants (e.g. `DateTime.monday`) instead of `int` literals (e.g. `1`).
   final List<int> weekendDays;
@@ -89,12 +84,8 @@ class TableCalendar<T> extends StatefulWidget {
   final bool daysOfWeekVisible;
 
   /// When set to true, tapping on an outside day in `CalendarFormat.month` format
-  /// will jump to the calendar page of the tapped month.
+  /// will jump to a page related to the tapped month.
   final bool pageJumpingEnabled;
-
-  /// When set to true, updating the `focusedDay` will display a scrolling animation
-  /// if the currently visible calendar page is changed.
-  final bool pageAnimationEnabled;
 
   /// When set to true, `CalendarFormat.month` will always display six weeks,
   /// even if the content would fit in less.
@@ -103,25 +94,22 @@ class TableCalendar<T> extends StatefulWidget {
   /// When set to true, `TableCalendar` will fill available height.
   final bool shouldFillViewport;
 
-  /// Whether to display week numbers on calendar.
-  final bool weekNumbersVisible;
-
   /// Used for setting the height of `TableCalendar`'s rows.
   final double rowHeight;
 
   /// Used for setting the height of `TableCalendar`'s days of week row.
   final double daysOfWeekHeight;
 
-  /// Specifies the duration of size animation that takes place whenever `calendarFormat` is changed.
+  /// Specifies the duration of size animation that takes place when `calendarFormat` is changed.
   final Duration formatAnimationDuration;
 
-  /// Specifies the curve of size animation that takes place whenever `calendarFormat` is changed.
+  /// Specifies the curve of size animation that takes place when `calendarFormat` is changed.
   final Curve formatAnimationCurve;
 
-  /// Specifies the duration of scrolling animation that takes place whenever the visible calendar page is changed.
+  /// Specifies the duration of page change animation that takes place when left or right chevron is tapped.
   final Duration pageAnimationDuration;
 
-  /// Specifies the curve of scrolling animation that takes place whenever the visible calendar page is changed.
+  /// Specifies the curve of page change animation that takes place when left or right chevron is tapped.
   final Curve pageAnimationCurve;
 
   /// `TableCalendar` will start weeks with provided day.
@@ -170,6 +158,9 @@ class TableCalendar<T> extends StatefulWidget {
 
   /// Function deciding whether given day should be marked as selected.
   final bool Function(DateTime day)? selectedDayPredicate;
+  final bool Function(DateTime day)? selectedDayPredicate1;
+  final bool Function(DateTime day)? selectedDayPredicate2;
+  final bool Function(DateTime day)? selectedDayPredicate3;
 
   /// Function deciding whether given day is treated as a holiday.
   final bool Function(DateTime day)? holidayPredicate;
@@ -210,7 +201,6 @@ class TableCalendar<T> extends StatefulWidget {
     required DateTime focusedDay,
     required DateTime firstDay,
     required DateTime lastDay,
-    DateTime? currentDay,
     this.locale,
     this.rangeStartDay,
     this.rangeEndDay,
@@ -224,10 +214,8 @@ class TableCalendar<T> extends StatefulWidget {
     this.headerVisible = true,
     this.daysOfWeekVisible = true,
     this.pageJumpingEnabled = false,
-    this.pageAnimationEnabled = true,
     this.sixWeekMonthsEnforced = false,
     this.shouldFillViewport = false,
-    this.weekNumbersVisible = false,
     this.rowHeight = 52.0,
     this.daysOfWeekHeight = 16.0,
     this.formatAnimationDuration = const Duration(milliseconds: 200),
@@ -249,6 +237,9 @@ class TableCalendar<T> extends StatefulWidget {
     this.eventLoader,
     this.enabledDayPredicate,
     this.selectedDayPredicate,
+    this.selectedDayPredicate1,
+    this.selectedDayPredicate2,
+    this.selectedDayPredicate3,
     this.holidayPredicate,
     this.onRangeSelected,
     this.onDaySelected,
@@ -269,7 +260,6 @@ class TableCalendar<T> extends StatefulWidget {
         focusedDay = normalizeDate(focusedDay),
         firstDay = normalizeDate(firstDay),
         lastDay = normalizeDate(lastDay),
-        currentDay = currentDay ?? DateTime.now(),
         super(key: key);
 
   @override
@@ -491,16 +481,11 @@ class _TableCalendarState<T> extends State<TableCalendar<T>> {
             startingDayOfWeek: widget.startingDayOfWeek,
             dowDecoration: widget.daysOfWeekStyle.decoration,
             rowDecoration: widget.calendarStyle.rowDecoration,
-            tableBorder: widget.calendarStyle.tableBorder,
-            tablePadding: widget.calendarStyle.tablePadding,
             dowVisible: widget.daysOfWeekVisible,
             dowHeight: widget.daysOfWeekHeight,
             rowHeight: widget.rowHeight,
             formatAnimationDuration: widget.formatAnimationDuration,
             formatAnimationCurve: widget.formatAnimationCurve,
-            pageAnimationEnabled: widget.pageAnimationEnabled,
-            pageAnimationDuration: widget.pageAnimationDuration,
-            pageAnimationCurve: widget.pageAnimationCurve,
             availableCalendarFormats: widget.availableCalendarFormats,
             simpleSwipeConfig: widget.simpleSwipeConfig,
             sixWeekMonthsEnforced: widget.sixWeekMonthsEnforced,
@@ -508,26 +493,6 @@ class _TableCalendarState<T> extends State<TableCalendar<T>> {
             onPageChanged: (focusedDay) {
               _focusedDay.value = focusedDay;
               widget.onPageChanged?.call(focusedDay);
-            },
-            weekNumbersVisible: widget.weekNumbersVisible,
-            weekNumberBuilder: (BuildContext context, DateTime day) {
-              final weekNumber = _calculateWeekNumber(day);
-              Widget? cell = widget.calendarBuilders.weekNumberBuilder
-                  ?.call(context, weekNumber);
-
-              if (cell == null) {
-                cell = Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Center(
-                    child: Text(
-                      weekNumber.toString(),
-                      style: widget.calendarStyle.weekNumberTextStyle,
-                    ),
-                  ),
-                );
-              }
-
-              return cell;
             },
             dowBuilder: (BuildContext context, DateTime day) {
               Widget? dowCell =
@@ -542,13 +507,11 @@ class _TableCalendarState<T> extends State<TableCalendar<T>> {
                     _isWeekend(day, weekendDays: widget.weekendDays);
 
                 dowCell = Center(
-                  child: ExcludeSemantics(
-                    child: Text(
-                      weekdayString,
-                      style: isWeekend
-                          ? widget.daysOfWeekStyle.weekendStyle
-                          : widget.daysOfWeekStyle.weekdayStyle,
-                    ),
+                  child: Text(
+                    weekdayString,
+                    style: isWeekend
+                        ? widget.daysOfWeekStyle.weekendStyle
+                        : widget.daysOfWeekStyle.weekdayStyle,
                   ),
                 );
               }
@@ -615,12 +578,11 @@ class _TableCalendarState<T> extends State<TableCalendar<T>> {
           children.add(rangeHighlight);
         }
 
-        final isToday = isSameDay(day, widget.currentDay);
+        final isToday = isSameDay(day, DateTime.now());
         final isDisabled = _isDayDisabled(day);
         final isWeekend = _isWeekend(day, weekendDays: widget.weekendDays);
 
         Widget content = CellContent(
-          key: ValueKey('CellContent-${day.year}-${day.month}-${day.day}'),
           day: day,
           focusedDay: focusedDay,
           calendarStyle: widget.calendarStyle,
@@ -628,6 +590,9 @@ class _TableCalendarState<T> extends State<TableCalendar<T>> {
           isTodayHighlighted: widget.calendarStyle.isTodayHighlighted,
           isToday: isToday,
           isSelected: widget.selectedDayPredicate?.call(day) ?? false,
+          isSelected1: widget.selectedDayPredicate1?.call(day) ?? false,
+          isSelected2: widget.selectedDayPredicate2?.call(day) ?? false,
+          isSelected3: widget.selectedDayPredicate3?.call(day) ?? false,
           isRangeStart: isRangeStart,
           isRangeEnd: isRangeEnd,
           isWithinRange: isWithinRange,
@@ -635,7 +600,6 @@ class _TableCalendarState<T> extends State<TableCalendar<T>> {
           isDisabled: isDisabled,
           isWeekend: isWeekend,
           isHoliday: widget.holidayPredicate?.call(day) ?? false,
-          locale: widget.locale,
         );
 
         children.add(content);
@@ -704,20 +668,6 @@ class _TableCalendarState<T> extends State<TableCalendar<T>> {
           margin: widget.calendarStyle.markerMargin,
           decoration: widget.calendarStyle.markerDecoration,
         );
-  }
-
-  int _calculateWeekNumber(DateTime date) {
-    final middleDay = date.add(const Duration(days: 3));
-    final dayOfYear = _dayOfYear(middleDay);
-
-    return 1 + ((dayOfYear - 1) / 7).floor();
-  }
-
-  int _dayOfYear(DateTime date) {
-    return normalizeDate(date)
-            .difference(DateTime.utc(date.year, 1, 1))
-            .inDays +
-        1;
   }
 
   bool _isWithinRange(DateTime day, DateTime start, DateTime end) {
